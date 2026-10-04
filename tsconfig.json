@@ -1,0 +1,35 @@
+{
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"inlineSourceMap": true,
+		"inlineSources": true,
+		"module": "ESNext",
+		"target": "ES2021",
+		"strict": true,
+		"allowJs": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedIndexedAccess": true,
+		"moduleResolution": "bundler",
+		"isolatedModules": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"allowSyntheticDefaultImports": true,
+		"importHelpers": true,
+		"strictNullChecks": true,
+		"lib": ["DOM", "ES5", "ES6", "ES7"],
+		"types": [
+			"node",
+			"obsidian",
+			"@codemirror/view",
+			"@codemirror/state",
+			"@codemirror/language"
+		]
+	},
+	"include": [
+		"src/**/*.ts",
+		"eslint.config.mts",
+		"vitest.config.mts"
+	]
+}

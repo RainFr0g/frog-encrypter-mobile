@@ -1,0 +1,22 @@
+# vscode
+.vscode
+
+# Intellij
+*.iml
+.idea
+
+# npm
+node_modules
+move-results.js
+
+# Build output — do not commit; upload to GitHub releases instead
+main.js
+result/
+*.map
+
+# Local plugin settings
+data.json
+
+# macOS Finder
+.DS_Store
+**/.DS_Store
