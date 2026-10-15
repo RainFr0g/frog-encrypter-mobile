@@ -1,11 +1,11 @@
 import { TFile, TFolder, Notice, Menu, WorkspaceLeaf, TextFileView } from 'obsidian';
-import { EncryptedFile, EncryptedNote, IFrogEncrypter } from '../utils/types';
+import { EncryptedFile, EncryptedNote, ErrnoException, IFrogEncrypter } from '../utils/types';
 import { getEncryptPasswordModal } from '../modals/EncryptPasswordModal';
 import { getDecryptPasswordModal } from '../modals/DecryptPasswordModal';
 import { CryptoService } from '../utils/CryptoService';
 import { FrogView } from './views/FrogView';
 import { MdencView } from './views/MdencView';
-import { formatBytes } from '../utils/mics';
+import { formatBytes, toArrayBuffer } from '../utils/mics';
 import { CHUNK_SIZE, FILE_ENCRYPTED_EXTENSION, FILE_VIEW_TYPE, JSON_SIZE_BYTES, MD_ENCRYPTED_EXTENSION, MD_VIEW_TYPE } from '../utils/constants';
 import { buildEncryptedNote, decryptNoteCipher, getJsonFooterFromBinary, persistPasswordAndCache, probeSavedPasswords, shouldCompress } from './helpers/EncryptHelper';
 import { StorageService } from '../utils/StorageService';
@@ -37,11 +37,11 @@ export class FileEncrypt {
 					);
 			})
 		);
-		
-		plugin.addCommand({id: 'frog-lock-encrypted-files', name: 'Lock all encrypted notes and files', callback: ()=> this.closeEncryptedLeaves(plugin)});
+
 		plugin.addCommand({id: 'frog-new-encrypted-note', name: 'Create new encrypted note', callback: async () => await this.createNewEncryptedNoteInFolder(this.getDefaultNoteFolder())});
-		plugin.addRibbonIcon('shield-check', 'Lock all encrypted notes and files', ()=> this.closeEncryptedLeaves(plugin)); 
+		plugin.addCommand({id: 'frog-lock-encrypted-files', name: 'Lock all encrypted notes and files', callback: ()=> this.closeEncryptedLeaves(plugin)});
 		plugin.addRibbonIcon('file-lock', 'Create new encrypted note',  async () => await this.createNewEncryptedNoteInFolder(this.getDefaultNoteFolder()));
+		plugin.addRibbonIcon('shield-check', 'Lock all encrypted notes and files', ()=> this.closeEncryptedLeaves(plugin)); 
 	}
 
 	private async closeEncryptedLeaves(plugin: IFrogEncrypter): Promise<void> {
@@ -159,121 +159,97 @@ export class FileEncrypt {
 		new Notice(`🔓 Decrypted as ${newPath.split('/').pop()}`);
 	}
 
-
 	private async encryptFile(file: TFile): Promise<void> {
 		const { password, hint, hasConfirmed } = await getEncryptPasswordModal(this.plugin.app);
 		if (!hasConfirmed) 
 			return;
 
 		const crypto = new CryptoService();
-		const notice = new CancellableNotice('🔒 Encrypting...');
+		const notice = new CancellableNotice('📂 Reading file...');
+		notice.hideButton();
 		const overallStart = Date.now();
 
-		let writeStream: ReturnType<typeof StorageService.fs.createWriteStream> | null = null;
-		let destAbs: string | null = null;
-		let success = false;
+		const candidate = file.path.replace(new RegExp(`\\.${file.extension}$`, 'i'), `.${FILE_ENCRYPTED_EXTENSION}`);
+		const newPath = StorageService.getUniqueVaultPath(this.plugin, candidate);
+		let created = false;
 
 		try {
-			const base = StorageService.getVaultPath(this.plugin);
-			if (!base) {
-				new Notice('❌ Streaming encryption requires a desktop (Electron) environment!');
-				return;
-			}
+			const fileBuffer = await this.plugin.app.vault.readBinary(file);
+			throwIfAborted(notice.signal);
 
-			const srcAbs = StorageService.path.join(base, file.path);
-			const candidate = file.path.replace(new RegExp(`\\.${file.extension}$`, 'i'), `.${FILE_ENCRYPTED_EXTENSION}`);
-			const relOut = StorageService.getUniqueVaultPath(this.plugin, candidate);
-			destAbs = StorageService.path.join(base, relOut);
-
-			const fileSize = StorageService.fs.statSync(srcAbs).size;
+			const fileBytes = new Uint8Array(fileBuffer);
+			const fileSize = fileBytes.length;
 			const originalSize = formatBytes(fileSize);
 			const isCompressed = shouldCompress(file.extension);
 
-			const readFd = StorageService.fs.openSync(srcAbs, 'r');
-			writeStream = StorageService.fs.createWriteStream(destAbs, { highWaterMark: CHUNK_SIZE * 2 });
-			const ws = writeStream;
+			const chunkSizes: number[] = [];
+			let offset = 0;
 
-			try {
-				const chunkSizes: number[] = [];
-				let offset = 0;
+			notice.showButton();
+			
+			if (fileSize === 0) {
+				const encrypted = await crypto.encrypt(new Uint8Array(0), password, isCompressed);
+				chunkSizes.push(encrypted.length);
+				await this.plugin.app.vault.createBinary(newPath, toArrayBuffer(encrypted));
+				created = true;
+			} else 
+				while (offset < fileSize) {
+					throwIfAborted(notice.signal);
 
-				if (fileSize === 0) {
-					const encrypted = await crypto.encrypt(new Uint8Array(0), password, isCompressed);
+					const toRead = Math.min(CHUNK_SIZE, fileSize - offset);
+					const plainBuf = fileBytes.slice(offset, offset + toRead);
+					offset += toRead;
+
+					const encrypted = await crypto.encrypt(plainBuf, password, isCompressed);
 					chunkSizes.push(encrypted.length);
-					const canContinue = ws.write(encrypted);
 
-					if (!canContinue) 
-						await new Promise<void>((resolve) => ws.once('drain', resolve));
-				} else {
-					while (offset < fileSize) {
-						throwIfAborted(notice.signal);  
+					const pct = Math.round((offset / fileSize) * 100);
+					notice.setMessage(`🔒 Encrypting... ${pct}% (${originalSize})`);
 
-						const toRead = Math.min(CHUNK_SIZE, fileSize - offset);
-						const plainBuf = new Uint8Array(toRead);
-						StorageService.fs.readSync(readFd, plainBuf, 0, toRead, offset);
-						offset += toRead;
-
-						const encrypted = await crypto.encrypt(plainBuf, password, isCompressed);
-						chunkSizes.push(encrypted.length);
-
-						const pct = Math.round((offset / fileSize) * 100);
-						notice.setMessage(`🔒 Encrypting... ${pct}% (${originalSize})`);
-
-						const canContinue = ws.write(encrypted);
-						if (!canContinue) 
-							await new Promise<void>((resolve) => ws.once('drain', resolve));
-					}
+					const buffer = toArrayBuffer(encrypted);
+					if (!created) {
+						await this.plugin.app.vault.createBinary(newPath, buffer);
+						created = true;
+					} else 
+						await this.plugin.app.vault.adapter.appendBinary(newPath, buffer);
 				}
 
-				const encryptedExtension = await crypto.encryptToBase64(file.extension, password, isCompressed);
+			throwIfAborted(notice.signal);
 
-				const cryptoCache = crypto.getCurrentCache();
-				if (cryptoCache)
-					PasswordManager.storeCache(cryptoCache);
+			const encryptedExtension = await crypto.encryptToBase64(file.extension, password, isCompressed);
+			const cryptoCache = crypto.getCurrentCache();
+			if (cryptoCache) 
+				PasswordManager.storeCache(cryptoCache);
 
-				const footer: EncryptedFile = { hint, isCompressed, extension: encryptedExtension, chunkSizes };
-				const footerBytes = new TextEncoder().encode(JSON.stringify(footer));
-				const sizeBuf = new Uint8Array(JSON_SIZE_BYTES);
-				new DataView(sizeBuf.buffer).setUint32(0, footerBytes.length, true);
+			const footer: EncryptedFile = { hint, isCompressed, extension: encryptedExtension, chunkSizes };
+			const footerBytes = new TextEncoder().encode(JSON.stringify(footer));
+			const sizeBuf = new Uint8Array(JSON_SIZE_BYTES);
+			new DataView(sizeBuf.buffer).setUint32(0, footerBytes.length, true);
 
-				const canContinueFooter = ws.write(footerBytes);
-				if (!canContinueFooter) 
-					await new Promise<void>((resolve) => ws.once('drain', resolve));
+			await this.plugin.app.vault.adapter.appendBinary(newPath, toArrayBuffer(footerBytes));
+			await this.plugin.app.vault.adapter.appendBinary(newPath, toArrayBuffer(sizeBuf));
 
-				const canContinueSize = ws.write(sizeBuf);
-				if (!canContinueSize) 
-					await new Promise<void>((resolve) => ws.once('drain', resolve));
-
-				await new Promise<void>((resolve, reject) => {
-					ws.on('finish', resolve);
-					ws.on('error', reject);
-					ws.end();
-				});
-				success = true;
-			} finally {
-				StorageService.fs.closeSync(readFd);
-			}
-
-			const encryptedByteSize = StorageService.fs.statSync(destAbs).size;
-			const encryptedSize = formatBytes(encryptedByteSize);
-			
 			let deleteFailed = false;
 			try {
 				await this.plugin.app.vault.delete(file);
 			} catch (e) {
-				const code = (e as NodeJS.ErrnoException)?.code;
+				const code = (e as ErrnoException).code;
 				if (code === 'EBUSY' || code === 'EPERM') 
 					deleteFailed = true;
 				else 
 					throw e;
 			}
 
+			const totalEncryptedSize = chunkSizes.reduce((a, b) => a + b, 0) + footerBytes.length + sizeBuf.length;
 			const elapsed = ((Date.now() - overallStart) / 1000).toFixed(1);
-			new Notice(`🔒 Encrypted (${originalSize} → ${encryptedSize}) in ${elapsed}s`, 8000);
-			if(deleteFailed)
-				new Notice(`❌ Could not delete the original file — it is currently in use. Close it and delete manually.`, 10000)
+			new Notice(`🔒 Encrypted (${originalSize} → ${formatBytes(totalEncryptedSize)}) in ${elapsed}s`, 8000);
+			if (deleteFailed) 
+				new Notice('❌ Could not delete the original file — it is currently in use.', 10000);
 
 		} catch (e) {
+			if (created) 
+				try { await this.plugin.app.vault.adapter.remove(newPath); } catch { /* ignore */ }
+
 			if (e instanceof DOMException && e.name === 'AbortError') 
 				new Notice('⛔ Encryption cancelled', 4000);
 			else {
@@ -281,26 +257,24 @@ export class FileEncrypt {
 				new Notice('❌ Encryption failed!');
 			}
 		} finally {
-			if (writeStream && !writeStream.writableFinished)
-				writeStream.destroy();
-
-			if (!success && destAbs)
-				try { StorageService.fs.unlinkSync(destAbs); } catch { /* ignore */ }
 			notice.hide();
 		}
 	}
 
 	private async decryptFile(file: TFile): Promise<void> {
-		let notice: CancellableNotice | null = null;
-		let writeStream: ReturnType<typeof StorageService.fs.createWriteStream> | null = null;
-		let destPath: string | null = null;
-		let success = false;
+		const notice = new CancellableNotice('📂 Reading file...');
+		notice.hideButton();
+		let newPath: string | null = null;
+		let created = false;
 
 		try {
-			const filePath = StorageService.path.join(StorageService.getVaultPath(this.plugin), file.path);
-			const fileSize = StorageService.fs.statSync(filePath).size;
+			const fileBuffer = await this.plugin.app.vault.readBinary(file);
+			throwIfAborted(notice.signal);
 
-			const fileJson = getJsonFooterFromBinary<EncryptedFile>(filePath);
+			const fileBytes = new Uint8Array(fileBuffer);
+			const fileSize = fileBytes.length;
+
+			const fileJson = getJsonFooterFromBinary<EncryptedFile>(fileBytes);
 			if (!fileJson) {
 				new Notice('❌ Failed to parse: invalid JSON');
 				return;
@@ -309,7 +283,7 @@ export class FileEncrypt {
 			const crypto = new CryptoService();
 			const cache = await probeSavedPasswords(crypto, fileJson.extension, fileJson.isCompressed);
 			const { password, hasConfirmed } = !cache ? await getDecryptPasswordModal(this.plugin.app, fileJson.hint) : { password: cache.password, hasConfirmed: true };
-			if (!hasConfirmed) 
+			if (!hasConfirmed)
 				return;
 
 			const extension = !cache ? await crypto.decryptToString(fileJson.extension, password, fileJson.isCompressed) : cache.result;
@@ -321,87 +295,63 @@ export class FileEncrypt {
 			const overallStart = Date.now();
 
 			const candidate = file.path.replace(new RegExp(`\\.${FILE_ENCRYPTED_EXTENSION}$`, 'i'), `.${extension}`);
-			const relOut = StorageService.getUniqueVaultPath(this.plugin, candidate);
-			destPath = StorageService.path.join(StorageService.getVaultPath(this.plugin), relOut);
+			newPath = StorageService.getUniqueVaultPath(this.plugin, candidate);
 
 			const payloadSize = fileJson.chunkSizes.reduce((a, b) => a + b, 0);
 			const encryptedSize = formatBytes(fileSize);
-
-			const readFd = StorageService.fs.openSync(filePath, 'r');
-			writeStream = StorageService.fs.createWriteStream(destPath, { highWaterMark: CHUNK_SIZE * 2 });
-			
-			writeStream.on('error', () => { /* ignore */ });
-			const ws = writeStream;
-			notice = new CancellableNotice('🔓 Decrypting...');
-
 			let currentPos = 0;
+			let processedCipher = 0;
 			let processedPlain = 0;
+			notice.showButton();
 
-			try {
-				for (const chunkSize of fileJson.chunkSizes) {
-					throwIfAborted(notice.signal);
+			for (const chunkSize of fileJson.chunkSizes) {
+				throwIfAborted(notice.signal);
 
-					const chunkBuf = new Uint8Array(chunkSize);
-					StorageService.fs.readSync(readFd, chunkBuf, 0, chunkSize, currentPos);
-					currentPos += chunkSize;
+				const chunkBuf = fileBytes.slice(currentPos, currentPos + chunkSize);
+				currentPos += chunkSize;
+				processedCipher += chunkSize;
 
-					const decryptedBytes = await crypto.decrypt(chunkBuf, password, fileJson.isCompressed);
-					if (decryptedBytes === null) 
-						throw new Error('DECRYPTION_FAILED');
+				const decryptedBytes = await crypto.decrypt(chunkBuf, password, fileJson.isCompressed);
+				if (decryptedBytes === null) 
+					throw new Error('DECRYPTION_FAILED');
 
-					processedPlain += decryptedBytes.length;
+				processedPlain += decryptedBytes.length;
 
-					const pct = payloadSize > 0 ? Math.min(100, Math.round((currentPos / payloadSize) * 100)) : 100;
-					notice.setMessage(`🔓 Decrypting... ${pct}% (${encryptedSize})`);
+				const pct = payloadSize > 0 ? Math.min(100, Math.round((processedCipher / payloadSize) * 100)) : 100;
+				notice.setMessage(`🔓 Decrypting... ${pct}% (${encryptedSize})`);
 
-					const canContinue = ws.write(decryptedBytes);
-					if (!canContinue) 
-						await new Promise<void>((resolve) => ws.once('drain', resolve));
-				}
-
-				await new Promise<void>((resolve, reject) => {
-					ws.on('finish', resolve);
-					ws.on('error', reject);
-					ws.end();
-				});
-				success = true;
-			} finally {
-				StorageService.fs.closeSync(readFd);
+				const buffer = toArrayBuffer(decryptedBytes);
+				if (!created) {
+					await this.plugin.app.vault.createBinary(newPath, buffer);
+					created = true;
+				} else 
+					await this.plugin.app.vault.adapter.appendBinary(newPath, buffer);
 			}
 
 			await this.plugin.app.vault.delete(file);
-			if (!cache)
+
+			if (!cache) 
 				persistPasswordAndCache(crypto, password);
 
 			const elapsed = ((Date.now() - overallStart) / 1000).toFixed(1);
 			const plainSize = formatBytes(processedPlain);
-
 			new Notice(`🔓 Decrypted (${encryptedSize} → ${plainSize}) in ${elapsed}s`, 8000);
+
 		} catch (e) {
-			if (e instanceof DOMException && e.name === 'AbortError') 
-				new Notice('⛔ Decryption cancelled', 4000);
-			else if (e instanceof Error && e.message === 'DECRYPTION_FAILED') 
+			if (created && newPath) 
+				try { await this.plugin.app.vault.adapter.remove(newPath); } catch { /* ignore */ }
+			
+
+			if (e instanceof Error && e.message === 'DECRYPTION_FAILED') 
 				new Notice('❌ Decryption failed: file is corrupted', 6000);
+			else if (e instanceof DOMException && e.name === 'AbortError') 
+				new Notice('⛔ Decryption cancelled', 4000);
 			else {
 				console.error(e);
 				new Notice('❌ Decryption failed!');
 			}
 		} finally {
-			if (writeStream && !writeStream.writableFinished) 
-				writeStream.destroy();
-
-			if (writeStream) {
-				const ws = writeStream;
-				await new Promise<void>((resolve) => {
-					if (ws.closed) resolve();
-					else ws.once('close', resolve);
-				});
-			}
-
-			if (!success && destPath) 
-				try { StorageService.fs.unlinkSync(destPath); } catch { /* ignore */ }
-
-			notice?.hide();
+			notice.hide();
 		}
 	}
 

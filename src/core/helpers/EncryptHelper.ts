@@ -1,11 +1,11 @@
 import { CryptoService } from '../../utils/CryptoService';
 import { EncryptedNote } from '../../utils/types';
 import { CHUNK_SIZE, JSON_SIZE_BYTES, OTHER_EXTENSIONS, SALT_SIZE, VECTOR_SIZE } from '../../utils/constants';
-import { StorageService } from '../../utils/StorageService';
 import { SettingsService } from '../../settings/SettingsService';
 import { PasswordManager } from '../../utils/PasswordManager';
 import { base64ToBytes, safeEndIndex } from '../../utils/mics';
-
+import { CancellableNotice, throwIfAborted } from '../../utils/CancellableNotice';
+import { Notice } from 'obsidian';
 
 export async function buildEncryptedNote(crypto: CryptoService, data:string, password: string, hint: string, extension: string): Promise<string>{
     const isCompressed = shouldCompress(extension);
@@ -28,28 +28,21 @@ export async function buildEncryptedNote(crypto: CryptoService, data:string, pas
     return JSON.stringify(encryptedData);
 }
 
-export function getJsonFooterFromBinary<T>(path: string): T | null{
-    const fileSize = StorageService.fs.statSync(path).size;
-    if (fileSize < JSON_SIZE_BYTES) 
+export function getJsonFooterFromBinary<T>(bytes: Uint8Array): T | null {
+    if (bytes.length < JSON_SIZE_BYTES) 
         return null;
-    
-    const fd = StorageService.fs.openSync(path, 'r');
-    const jsonSizeBuf = new Uint8Array(JSON_SIZE_BYTES);
-    StorageService.fs.readSync(fd, jsonSizeBuf, 0, JSON_SIZE_BYTES, fileSize - JSON_SIZE_BYTES);
 
-    const jsonSize = new DataView(jsonSizeBuf.buffer, jsonSizeBuf.byteOffset, jsonSizeBuf.byteLength).getUint32(0, true);
-    
-    if (jsonSize <= 0 || jsonSize > fileSize - JSON_SIZE_BYTES) {
-        StorageService.fs.closeSync(fd);
+    const sizeOffset = bytes.length - JSON_SIZE_BYTES;
+    const jsonSize = new DataView(bytes.buffer, bytes.byteOffset + sizeOffset, JSON_SIZE_BYTES).getUint32(0, true);
+
+    if (jsonSize <= 0 || jsonSize > bytes.length - JSON_SIZE_BYTES) 
         return null;
-    }
-    
-    const jsonBuf = new Uint8Array(jsonSize);
-    StorageService.fs.readSync(fd, jsonBuf, 0, jsonSize, fileSize - JSON_SIZE_BYTES - jsonSize);
-    StorageService.fs.closeSync(fd);
-    
+
+    const jsonStart = bytes.length - JSON_SIZE_BYTES - jsonSize;
+    const jsonBytes = bytes.slice(jsonStart, jsonStart + jsonSize);
+
     try {
-        return JSON.parse(new TextDecoder().decode(jsonBuf)) as T;
+        return JSON.parse(new TextDecoder().decode(jsonBytes)) as T;
     } catch {
         return null;
     }
@@ -67,31 +60,51 @@ export async function probeSavedPasswords(crypto: CryptoService, probeCipher: st
     const activePasswords = PasswordManager.getAllActivePasswords();
     const triedViaCache = new Set<string>();
         
-    for (const password of activePasswords) {
-        const cachedKey = PasswordManager.getCachedCryptoKey(password, saltBytes);
-        if (!cachedKey) 
-            continue;
+    const notice = new CancellableNotice('🔑 Trying saved passwords...');
+    let attempt = 0;
+    try{
+        for (const password of activePasswords) {
+            const cachedKey = PasswordManager.getCachedCryptoKey(password, saltBytes);
+            if (!cachedKey) 
+                continue;
 
-        triedViaCache.add(password);
-        crypto.setCache(password, saltBytes, cachedKey);
+            triedViaCache.add(password);
+            crypto.setCache(password, saltBytes, cachedKey);
 
-        const result = await crypto.decryptToString(probeCipher, password, probeIsCompress);
-        if (result !== null) 
-            return { password, result };
-    }
-    for (const password of activePasswords) {
-        if (triedViaCache.has(password)) 
-            continue;
-
-        const result = await crypto.decryptToString(probeCipher, password, probeIsCompress);
-        if (result !== null) {
-            const fresh = crypto.getCurrentCache();
-            if (fresh) 
-                PasswordManager.storeCache(fresh);
-
-            return { password, result };
+            const result = await crypto.decryptToString(probeCipher, password, probeIsCompress);
+            if (result !== null) 
+                return { password, result };
         }
-    }
+        
+        for (const password of activePasswords) {
+            throwIfAborted(notice.signal);
+
+            attempt++;
+            const total = activePasswords.length;
+            notice.setMessage(`🔑 Trying saved passwords... ${attempt}/${total}`);
+
+            if (triedViaCache.has(password)) 
+                continue;
+
+            const result = await crypto.decryptToString(probeCipher, password, probeIsCompress);
+            if (result !== null) {
+                const fresh = crypto.getCurrentCache();
+                if (fresh) 
+                    PasswordManager.storeCache(fresh);
+
+                return { password, result };
+            }
+        }
+    }catch (error) {
+		if (error instanceof DOMException && error.name === 'AbortError') 
+            new Notice('⛔ Password check cancelled', 2000);
+		else {
+			console.error(error);
+			new Notice('❌ Probe failed!');
+		}
+		return null;
+	} finally { notice.hide(); }
+
 	return null;
 }
 

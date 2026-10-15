@@ -146,9 +146,38 @@
 }
 
 /* --------------------------------------------------------------------------
-   6. Notice cancel button (CancellableNotice.ts.ts)
+   6. Notice cancel button (CancellableNotice.ts)
    -------------------------------------------------------------------------- */
 
+.frog-cancellable-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 12px;
+}
+
+.frog-cancellable-notice-message {
+    flex: 1;
+}
+
 .frog-cancellable-notice-button {
-    margin-left: 10px;
+    flex-shrink: 0; 
+}
+
+.frog-cancellable-notice-hidden {
+    display: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. Encrypted note view (MdencView.ts)
+   -------------------------------------------------------------------------- */
+
+.is-mobile .workspace-leaf-content[data-type='frog-mdenc-view'] .cm-scroller.cm-scroller {
+    padding-top: 0 !important;
+}
+
+.workspace-leaf-content[data-type='frog-mdenc-view'] .view-content {
+    padding: 0;
+    overflow: hidden;
 }

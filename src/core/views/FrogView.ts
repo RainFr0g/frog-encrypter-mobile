@@ -2,9 +2,10 @@ import { TFile, Notice, FileView, WorkspaceLeaf } from 'obsidian';
 import { EncryptedFile, IFrogEncrypter } from '../../utils/types';
 import { getDecryptPasswordModal } from '../../modals/DecryptPasswordModal';
 import { CryptoService } from '../../utils/CryptoService';
-import { StorageService } from '../../utils/StorageService';
 import { FILE_ENCRYPTED_EXTENSION, FILE_VIEW_TYPE, MIME_TYPES } from '../../utils/constants';
 import { getJsonFooterFromBinary, persistPasswordAndCache, probeSavedPasswords } from '../helpers/EncryptHelper';
+import { formatBytes, toArrayBuffer } from '../../utils/mics';
+import { CancellableNotice, throwIfAborted } from '../../utils/CancellableNotice';
 
 export class FrogView extends FileView {
 	private plugin: IFrogEncrypter;
@@ -42,14 +43,19 @@ export class FrogView extends FileView {
 		this.revokeObjectUrl();
 		this.hint = '';
 		this.extension = '';
-		this.contentEl.empty();	
+		this.contentEl.empty();
 
 		const crypto = new CryptoService();
-		const notice = new Notice('🔓 Decrypting…', 0);
-
+    	const notice = new CancellableNotice('📂 Reading file...');
+		notice.hideButton();
+		
 		try {
-            const fullFilePath = StorageService.path.join(StorageService.getVaultPath(this.plugin), file.path);
-            const fileJsonFooter = getJsonFooterFromBinary<EncryptedFile>(fullFilePath);
+			const fileBuffer = await this.plugin.app.vault.readBinary(file);
+			throwIfAborted(notice.signal);
+
+			const fileBytes = new Uint8Array(fileBuffer);
+
+			const fileJsonFooter = getJsonFooterFromBinary<EncryptedFile>(fileBytes);
 			if (!fileJsonFooter) {
 				new Notice('❌ Failed to parse: invalid JSON!');
 				this.leaf.detach();
@@ -57,58 +63,75 @@ export class FrogView extends FileView {
 			}
 			this.hint = fileJsonFooter.hint;
 
-            const cache = await probeSavedPasswords(crypto, fileJsonFooter.extension, fileJsonFooter.isCompressed);
+			const cache = await probeSavedPasswords(crypto, fileJsonFooter.extension, fileJsonFooter.isCompressed);
 			const { password, hasConfirmed } = !cache ? await getDecryptPasswordModal(this.plugin.app, this.hint) : {password : cache.password, hasConfirmed: true};
 			if (!hasConfirmed) {
 				this.leaf.detach();
 				return;
 			}
-            
-            const extension = !cache ? await crypto.decryptToString(fileJsonFooter.extension, password, fileJsonFooter.isCompressed) : cache.result;
-            if(extension === null) {
-                new Notice('❌ Decryption failed!');
+			
+			const extension = !cache ? await crypto.decryptToString(fileJsonFooter.extension, password, fileJsonFooter.isCompressed) : cache.result;
+			if(extension === null) {
+				new Notice('❌ Decryption failed!');
 				this.leaf.detach();
-                return;
-            }
+				return;
+			}
 			this.extension = extension;
 
-			const plain = await this.decryptAllChunks(crypto, fullFilePath, fileJsonFooter, password);
+			notice.setMessage('🔓 Decrypting...');
+			notice.showButton();
+			const plain = await this.decryptAllChunks(crypto, fileBytes, fileJsonFooter, password, notice);
 			if (!plain) {
 				new Notice('❌ Decryption failed!');
 				this.leaf.detach();
 				return;
 			}
-
-            if (!cache)
-                persistPasswordAndCache(crypto, password);
+			
+			if (!cache) 
+				persistPasswordAndCache(crypto, password);
 
 			this.renderContent(this.extension, plain);
+		} catch (e) {
+			if (e instanceof DOMException && e.name === 'AbortError')
+				new Notice('⛔ Decryption cancelled', 4000);
+			else {
+				console.error(e);
+				new Notice('❌ Decryption failed!');
+			}
+			this.leaf.detach();
 		} finally {
 			notice.hide();
 		}
 	}
 
-	private async decryptAllChunks(crypto: CryptoService, path: string, jsonFooter: EncryptedFile, password: string): Promise<Uint8Array | null> {
+	private async decryptAllChunks(crypto: CryptoService, fileBytes: Uint8Array, jsonFooter: EncryptedFile, password: string, notice: CancellableNotice): Promise<Uint8Array | null> {
 		const pieces: Uint8Array[] = [];
 		let currentPos = 0;
-		const readFd = StorageService.fs.openSync(path, 'r');
+		let processedCipher = 0;
+
+		const payloadSize = jsonFooter.chunkSizes.reduce((a, b) => a + b, 0);
+		const encryptedSize = formatBytes(fileBytes.length);
 
 		for (const chunkSize of jsonFooter.chunkSizes) {
-            const chunkBuf = new Uint8Array(chunkSize);
-            StorageService.fs.readSync(readFd, chunkBuf, 0, chunkSize, currentPos);
+			throwIfAborted(notice.signal);
+
+			const chunkBuf = fileBytes.slice(currentPos, currentPos + chunkSize);
 			currentPos += chunkSize;
+			processedCipher += chunkSize;
 
 			const decryptedData = await crypto.decrypt(chunkBuf, password, jsonFooter.isCompressed);
-			if (!decryptedData){
-				StorageService.fs.closeSync(readFd);
+			if (!decryptedData)
 				return null;
-			}
+
 			pieces.push(decryptedData);
+
+			const pct = payloadSize > 0 ? Math.min(100, Math.round((processedCipher / payloadSize) * 100)) : 100;
+			notice.setMessage(`🔓 Decrypting... ${pct}% (${encryptedSize})`);
+			await nextFrame();
 		}
-        StorageService.fs.closeSync(readFd);
-        
-        if(pieces.length === 0)
-            return null;
+
+		if(pieces.length === 0)
+			return null;
 
 		const total = pieces.reduce((previousValue, currentValue) => previousValue + currentValue.length, 0);
 		const out = new Uint8Array(total);
@@ -138,9 +161,7 @@ export class FrogView extends FileView {
 	}
 
 	private renderBlobMedia(mime: string, bytes: Uint8Array): void {
-		const copy = new Uint8Array(bytes.byteLength);
-		copy.set(bytes);
-		const blob = new Blob([copy], { type: mime });
+		const blob = new Blob([toArrayBuffer(bytes)], { type: mime });
 		this.objectUrl = URL.createObjectURL(blob);
 
 		if (mime.startsWith('image/')) {

@@ -24,6 +24,14 @@ export function base64ToBytes(base64: string): Uint8Array {
 	return bytes;
 }
 
+export function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+    const buffer = bytes.buffer;
+    if (buffer instanceof ArrayBuffer) 
+        return buffer;
+	
+    throw new Error('Uint8Array.buffer is not ArrayBuffer');
+}
+
 function hintHash(bytes: Uint8Array): number {
 	let hash = 0x811C9DC5;
 	for (const byte of bytes) {
@@ -143,4 +151,8 @@ export function safeEndIndex(data: string, end: number): number {
 
 function isHighSurrogate(c: number): boolean {
 	return c >= 0xd800 && c <= 0xdbff;
+}
+
+export function nextFrame(): Promise<void> {
+    return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
 }
