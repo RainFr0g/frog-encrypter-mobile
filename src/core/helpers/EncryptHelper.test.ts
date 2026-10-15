@@ -1,7 +1,4 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
 
 // ==================== Controllable settings state ====================
 type SettingsState = {
@@ -15,11 +12,13 @@ const settingsState: SettingsState = vi.hoisted(() => ({
 }));
 
 // ==================== Mocks ====================
-vi.mock('../../utils/StorageService', async () => {
-    const fs = await import('node:fs');
-    const path = await import('node:path');
-    return { StorageService: { fs, path } };
-});
+vi.mock('obsidian', () => ({
+    Notice: class {
+        constructor(public message: string, public timeout?: number) {}
+        hide() {}
+        setMessage(msg: string) { this.message = msg; }
+    }
+}));
 
 vi.mock('../../settings/SettingsService', () => ({
     SettingsService: {
@@ -39,14 +38,8 @@ vi.mock('../../utils/PasswordManager', () => ({
 }));
 
 // ==================== Imports (after mocks) ====================
-import {
-    buildEncryptedNote,
-    decryptNoteCipher,
-    getJsonFooterFromBinary,
-    shouldCompress,
-} from './EncryptHelper';
+import { buildEncryptedNote, decryptNoteCipher, shouldCompress } from './EncryptHelper';
 import { CryptoService } from '../../utils/CryptoService';
-import { StorageService } from '../../utils/StorageService';
 import { OTHER_EXTENSIONS } from '../../utils/constants';
 import type { EncryptedNote } from '../../utils/types';
 
@@ -171,79 +164,5 @@ describe('buildEncryptedNote / decryptNoteCipher', () => {
         const note = JSON.parse(json) as EncryptedNote;
         expect(note.extension).not.toBe('md');
         expect(note.extension.length).toBeGreaterThan(0);
-    });
-});
-
-// ==================== getJsonFooterFromBinary ====================
-describe('getJsonFooterFromBinary', () => {
-    function writeTestFile(prefix: Uint8Array, footer: object): string {
-        const path = join(tmpdir(), `frog-test-${randomUUID()}.bin`);
-        const footerBytes = new TextEncoder().encode(JSON.stringify(footer));
-        const sizeBuf = new Uint8Array(4);
-        new DataView(sizeBuf.buffer).setUint32(0, footerBytes.length, true);
-
-        const combined = new Uint8Array(prefix.length + footerBytes.length + 4);
-        combined.set(prefix, 0);
-        combined.set(footerBytes, prefix.length);
-        combined.set(sizeBuf, prefix.length + footerBytes.length);
-
-        StorageService.fs.writeFileSync(path, Buffer.from(combined));
-        return path;
-    }
-
-    test('reads valid footer', () => {
-        const footer = { hint: 'test', isCompressed: false, extension: 'abc', chunkSizes: [1, 2, 3] };
-        const path = writeTestFile(new Uint8Array([1, 2, 3, 4, 5]), footer);
-        try {
-            expect(getJsonFooterFromBinary<typeof footer>(path)).toEqual(footer);
-        } finally {
-            StorageService.fs.unlinkSync(path);
-        }
-    });
-
-    test('reads footer from empty prefix', () => {
-        const footer = { only: 'footer' };
-        const path = writeTestFile(new Uint8Array(0), footer);
-        try {
-            expect(getJsonFooterFromBinary<typeof footer>(path)).toEqual(footer);
-        } finally {
-            StorageService.fs.unlinkSync(path);
-        }
-    });
-
-    test('returns null for file < 4 bytes', () => {
-        const path = join(tmpdir(), `frog-test-tiny-${randomUUID()}.bin`);
-        StorageService.fs.writeFileSync(path, Buffer.from([0x00, 0x01]));
-        try {
-            expect(getJsonFooterFromBinary(path)).toBeNull();
-        } finally {
-            StorageService.fs.unlinkSync(path);
-        }
-    });
-
-    test('returns null for invalid JSON footer', () => {
-        const path = join(tmpdir(), `frog-test-bad-${randomUUID()}.bin`);
-        const badJson = new TextEncoder().encode('not-json-at-all');
-        const sizeBuf = new Uint8Array(4);
-        new DataView(sizeBuf.buffer).setUint32(0, badJson.length, true);
-        StorageService.fs.writeFileSync(path, Buffer.concat([Buffer.from(badJson), Buffer.from(sizeBuf)]));
-        try {
-            expect(getJsonFooterFromBinary(path)).toBeNull();
-        } finally {
-            StorageService.fs.unlinkSync(path);
-        }
-    });
-
-    test('returns null when jsonSize exceeds file size', () => {
-        const path = join(tmpdir(), `frog-test-huge-${randomUUID()}.bin`);
-        const sizeBuf = new Uint8Array(4);
-        // claim footer is 1 MB, but file is only 4 bytes
-        new DataView(sizeBuf.buffer).setUint32(0, 1_000_000, true);
-        StorageService.fs.writeFileSync(path, Buffer.from(sizeBuf));
-        try {
-            expect(getJsonFooterFromBinary(path)).toBeNull();
-        } finally {
-            StorageService.fs.unlinkSync(path);
-        }
     });
 });

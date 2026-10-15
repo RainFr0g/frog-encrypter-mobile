@@ -40,5 +40,8 @@ export interface PackIndex {
 	totalOriginalSize: number;
 }
 
+export interface ErrnoException extends Error {
+    code?: string;
+}
 
 export type compressionMode = 'always' | 'never' | 'by_extension';

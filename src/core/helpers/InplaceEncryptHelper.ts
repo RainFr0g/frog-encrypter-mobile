@@ -22,6 +22,17 @@ export class InplaceEncryptHelper {
             )
         );
 
+        plugin.addCommand({ id: 'frog-encrypt-selection', name: 'Encrypt selection', icon: 'lock',
+            editorCheckCallback: (checking: boolean, editor: Editor) => {
+                if (!editor.somethingSelected())
+                    return false;
+                if (!checking)
+                    void this.showSelectedEncryptModal(plugin, editor);
+
+                return true;
+            }
+        });
+
         plugin.addCommand({id: 'frog-insert-encrypt', name: 'Insert encrypted text', icon: 'lock-keyhole',
             editorCallback: async (editor: Editor) => {
                 await this.showInsertEncryptModal(plugin, editor);

@@ -1,7 +1,2 @@
-import { webcrypto } from 'node:crypto';
-
-Object.defineProperty(globalThis, 'crypto', {
-    value: webcrypto,
-    configurable: true,
-    writable: true
-});
+if (typeof globalThis.crypto === 'undefined') 
+    throw new Error('Web Crypto API is not available. Node.js 20+ is required.');
