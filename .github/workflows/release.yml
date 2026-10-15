@@ -45,10 +45,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${GITHUB_REF#refs/tags/}"
+          gh release delete "$tag" --yes || true
           gh release create "$tag" \
             --title "$tag" \
             --notes "Release $tag" \
-            --clobber \
             result/main.js \
             result/manifest.json \
             result/styles.css
