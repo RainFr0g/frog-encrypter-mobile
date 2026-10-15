@@ -1,16 +1,20 @@
-# Frog Encrypter
+# Frog Encrypter Mobile
 
-**Encryption of text fragments, notes, and files both inside and outside the Obsidian vault.**
+![GitHub release](https://img.shields.io/github/v/release/RainFr0g/frog-encrypter-mobile)
+![GitHub license](https://img.shields.io/github/license/RainFr0g/frog-encrypter-mobile)
+![Obsidian min version](https://img.shields.io/badge/Obsidian-1.8.7%2B-blue)
 
-Frog Encrypter lets you encrypt selected text, entire notes, and any files directly inside Obsidian. Files are encrypted using **AES-256-GCM** and **PBKDF2 (SHA-512)** algorithms.
+**Encryption of text fragments, notes, and files inside the Obsidian vault.**
 
-> ⚠️ **Desktop only.** Some features use desktop-only APIs and do not work on mobile devices. For Android/iOS, use **[Frog Encrypter Mobile](#)** (Coming soon) — files created by either plugin are compatible with each other.
+Frog Encrypter Mobile lets you encrypt selected text, entire notes, and any files directly inside Obsidian. Files are encrypted using **AES-256-GCM** and **PBKDF2 (SHA-512)** algorithms.
+
+> 📱💻 **Works on mobile devices and desktop.** The plugin is optimized for mobile, but also works on desktop systems. However, for desktop we recommend **[Frog Encrypter](https://community.obsidian.md/plugins/frog-encrypter)** — its version uses Electron APIs for byte-level file reading and writing, and chunked processing, which makes encryption significantly gentler on RAM, and it has additional features.
 
 ---
 
 ## ❤️ Support
 
-If you find Frog Encrypter useful, please support development:
+If you find Frog Encrypter Mobile useful, please support development:
 
 - ⭐ Star the repository
 - ☕ [Buy me a coffee](https://buymeacoffee.com/rainfr0g)
@@ -22,17 +26,22 @@ Author: **[RainFr0g](https://github.com/RainFr0g)**
 ## ✨ Features
 
 - **Text encryption** — only the selected fragment inside a note is encrypted.
-- **Entire note encryption** — the note becomes a `.mdenc` file but remains editable directly in Obsidian.
+- **Note encryption** — the note becomes a `.mdenc` file but remains editable directly in Obsidian.
 - **File encryption** — any file supported by Obsidian is encrypted into `.fenc`.
-- **Archive packing** — folders and files (both inside and outside the vault) are packed into a single `.fpack`.
 - **Compression** — optional DEFLATE compression before encryption, configurable by file extension.
 - **Password manager** — stores passwords in memory for a set time and automatically tries them on every decryption.
 
 ---
 
+## 🔄 Compatibility
+
+Files created by this version are **fully compatible** with the desktop [Frog Encrypter](https://github.com/RainFr0g/frog-encrypter). You can encrypt a note on your phone and decrypt it on desktop, and vice versa.
+
+---
+
 ## 📂 Supported formats
 
-Frog Encrypter can encrypt and decrypt any file type supported by Obsidian, including formats added by third-party plugins. Obsidian out of the box supports **24 file types**.
+Frog Encrypter Mobile can encrypt and decrypt any file type supported by Obsidian, including formats added by third-party plugins. Obsidian out of the box supports **24 file types**.
 
 | Category           | Extensions                                                 | Behavior when encrypted |
 | ------------------ | ---------------------------------------------------------- | ----------------------- |
@@ -49,20 +58,51 @@ In total, **22 out of 24** formats can be previewed directly in encrypted form. 
 
 ## 🖱 Usage
 
-### In the editor (right-click inside a note)
+### In the editor
 
-- **Encrypt selection** — encrypt the selected text
-- **Insert encrypted text** — open a modal window and enter text with a password
+#### Encryption
+
+You can encrypt text using the command palette, or for convenience, add these commands to the editor toolbar.
+
+**How to add commands to the toolbar:**
+
+**Step 1.** Open the toolbar settings:
+
+![Step 1](assets/mobile-toolbar-1.png)
+
+**Step 2.** Add the desired Frog Encrypter command:
+
+![Step 2](assets/mobile-toolbar-2.png)
+
+**Step 3.** Enjoy:
+
+![Step 3](assets/mobile-toolbar-3.png)
+
+Available commands:
+
+- **Encrypt selection** — encrypt the selected text (appears only when text is selected)
+- **Insert encrypted text** — open a modal window to enter text and a password
+
+#### Decryption
+
+In encrypted text, you will see a **lock icon**.
+
+- **Short press** — open the decryption window.
+- **Long press** (or right-click on desktop) — open a context menu with options:
+  - **Decrypt** — decrypt with the option to edit and save
+  - **Decrypt and copy** — decrypt and immediately copy the result to the clipboard
 
 ### In the file explorer
 
-- Right-click a **note** → **Encrypt note**
-- Right-click a **file** → **Encrypt file**
-- Right-click an **encrypted note** → **Decrypt note**
-- Right-click an **encrypted file** → **Decrypt file**
-- Right-click a **folder or empty space** → **New encrypted note**
+Long press (or right-click on desktop) on a file or folder:
 
-### Ribbon buttons and commands
+- **Note** → **Encrypt note**
+- **File** → **Encrypt file**
+- **Encrypted note** → **Decrypt note**
+- **Encrypted file** → **Decrypt file**
+- **Folder or empty space** → **New encrypted note**
+
+### Ribbon buttons
 
 - **New encrypted note** — create a new empty encrypted note in the default notes folder
 - **Lock all encrypted notes and files** — close all open encrypted tabs
@@ -72,14 +112,10 @@ In total, **22 out of 24** formats can be previewed directly in encrypted form. 
 
 ## ⚙️ Settings
 
-- **Confirm password** — when encrypting, asks for password confirmation to avoid typos
+- **Confirm password** — asks for password confirmation when encrypting to avoid typos
 - **Remember password** — enables storing entered passwords in memory
 - **Autofill recent password** — automatically fills in the last successfully used password
-- **Password lifetime** — the time during which a password remains in memory after the last manual entry (TTL)
-- **Archive encryption** — packing, encrypting, and decrypting `.fpack` archives:
-  - Encrypt the entire vault
-  - Encrypt external files or folders (switch modes via the gear icon)
-  - Decrypt existing `.fpack` files
+- **Password lifetime** — how long a password remains in memory after the last manual entry (TTL)
 - **Compression mode**:
   - `Always` — compress everything
   - `Never` — do not compress
@@ -92,10 +128,12 @@ In total, **22 out of 24** formats can be previewed directly in encrypted form. 
 - **Algorithm:** AES-256-GCM
 - **Key derivation:** PBKDF2 (SHA-512) with 200,000 iterations
 - **Compression:** DEFLATE (via [pako](https://github.com/nodeca/pako))
-- **Storage:** encrypted data is stored in base64 (strings and notes) or in binary format (files and archives)
-- **Chunking:** encryption of files and `.fpack` archives uses asynchronous streaming chunk processing — minimal RAM usage even for large files. Chunking is not used for strings and notes.
+- **Storage:** encrypted data is stored in base64 (strings and notes) or in binary format (files)
+- **Chunking:** file encryption uses asynchronous chunked processing. Chunking is not used for strings and notes.
 
-## 🚀 Performance notes
+---
+
+## 🚀 Performance
 
 **PBKDF2 as protection against brute force.** Key derivation uses **PBKDF2 with 200,000 SHA-512 iterations**. This is deliberate — it makes password brute-forcing computationally expensive, extending the search time from hours to hundreds of years. The trade-off is that each new `(password, salt)` pair requires a one-time key derivation, which takes a noticeable amount of time.
 
@@ -107,12 +145,36 @@ If speed matters more than convenience, disable **Remember password** and enter 
 
 **Compression — a trade-off between speed and size.** Running DEFLATE before encryption noticeably slows down encryption and decryption of **large** files, since compression costs CPU time. However:
 
-- On **text documents** (`.md`, `.txt`, `.json`, `.xml`, `.html`, source code), compression typically reduces size by **3–10×**, while the speed cost is minor — text compresses quickly, and the I/O savings often offset the CPU work.
+- On **text documents** (`.md`, `.txt`, `.json`, `.xml`, `.html`, source code), compression typically reduces size by **3–10×**, while the speed cost is minor — text compresses quickly.
 - On **media files** (`.jpg`, `.png`, `.mp4`, `.mp3`), compression brings almost no size reduction but still spends time. That's why they are **excluded** from compression by default.
 - On **already-compressed archives** (`.zip`, `.7z`, `.gz`), DEFLATE is useless — they are already compressed.
 - On **large binary files** (`.exe`, `.dll`, `.iso`), compression can slow the operation down several times without a meaningful size gain.
 
 By default, the **Compress by extension** mode is used with a sensible set of rules. If maximum speed matters, switch the mode to `Never`.
+
+---
+
+## ⚖️ Comparison with the desktop version
+
+Frog Encrypter Mobile works on both mobile devices and desktop, but it has **fundamental differences** from the desktop version [Frog Encrypter](https://community.obsidian.md/plugins/frog-encrypter), due to platform limitations.
+
+### Frog Encrypter (Desktop)
+
+The desktop version uses **Electron APIs** (`fs`, `path`), which gives it two key advantages:
+
+- **Byte-level file reading and writing** — the file is not loaded entirely into memory, but processed as a stream, chunk by chunk.
+- **Streaming encryption of large files** — even when encrypting a file of several gigabytes, RAM usage remains consistently low, around **20–30 MB**, regardless of file size.
+
+The desktop version can also encrypt **external files** — those located outside the Obsidian vault, via system dialogs.
+
+### Frog Encrypter Mobile
+
+Mobile Obsidian **does not provide access to Electron APIs**, so the plugin uses the Vault API:
+
+- **`vault.readBinary()` loads the entire file into an `ArrayBuffer`** — RAM usage scales with the file size.
+- **When encrypting large files**, memory consumption grows proportionally to the file size, which makes working with very large files demanding on RAM. On devices with limited memory, this may cause slowdowns or app termination.
+- **No external file support** — mobile Obsidian does not provide system file dialogs.
+- **No archive packing** — the `.fpack` feature from the desktop version is unavailable.
 
 ---
 
