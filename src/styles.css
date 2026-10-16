@@ -15,6 +15,10 @@
     cursor: pointer;
 }
 
+.frog-secret-icon:hover {
+    background-color: var(--text-accent);
+}
+
 /* --------------------------------------------------------------------------
    2. Modals (DecryptResultModal.ts, EncrypInsertPasswordModal.ts)
    -------------------------------------------------------------------------- */
