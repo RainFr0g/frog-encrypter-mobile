@@ -4,7 +4,7 @@ import { getDecryptPasswordModal } from '../../modals/DecryptPasswordModal';
 import { CryptoService } from '../../utils/CryptoService';
 import { FILE_ENCRYPTED_EXTENSION, FILE_VIEW_TYPE, MIME_TYPES } from '../../utils/constants';
 import { getJsonFooterFromBinary, persistPasswordAndCache, probeSavedPasswords } from '../helpers/EncryptHelper';
-import { formatBytes, toArrayBuffer } from '../../utils/mics';
+import { formatBytes, toArrayBuffer } from '../../utils/misc';
 import { CancellableNotice, throwIfAborted } from '../../utils/CancellableNotice';
 
 export class FrogView extends FileView {

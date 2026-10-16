@@ -2,7 +2,7 @@ import { App, Modal, Notice, Setting, TextComponent } from 'obsidian';
 import { SettingsService } from '../settings/SettingsService';
 import { PasswordManager } from '../utils/PasswordManager';
 import { enforceHintByteLimit, matchAnimation, mismatchAnimation, setupEnterAsTab } from './EncryptPasswordModal';
-import { encodeHint } from '../utils/mics';
+import { encodeHint } from '../utils/misc';
 
 export function getEncryptInsertPasswordModal(app: App) {
 	return new Promise<{ textToEncrypt: string; password: string; hint: string; hasConfirmed: boolean; }>((resolve) => {

@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { CryptoService } from './CryptoService';
-import { base64ToBytes, bytesToBase64 } from './mics';
+import { base64ToBytes, bytesToBase64 } from './misc';
 import { SALT_SIZE, VECTOR_SIZE } from './constants';
 
 // ==================== Basic roundtrips ====================

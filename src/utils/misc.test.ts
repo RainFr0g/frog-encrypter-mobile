@@ -10,7 +10,7 @@ import {
     formatBytes,
     safeEndIndex,
     getTimeStamp,
-} from './mics';
+} from './misc';
 import { HINT_MAX_BYTES } from './constants';
 
 // ==================== base64 ====================

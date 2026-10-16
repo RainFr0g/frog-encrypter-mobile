@@ -3,7 +3,7 @@ import { EncryptedNote } from '../../utils/types';
 import { CHUNK_SIZE, JSON_SIZE_BYTES, OTHER_EXTENSIONS, SALT_SIZE, VECTOR_SIZE } from '../../utils/constants';
 import { SettingsService } from '../../settings/SettingsService';
 import { PasswordManager } from '../../utils/PasswordManager';
-import { base64ToBytes, safeEndIndex } from '../../utils/mics';
+import { base64ToBytes, safeEndIndex } from '../../utils/misc';
 import { CancellableNotice, throwIfAborted } from '../../utils/CancellableNotice';
 import { Notice } from 'obsidian';
 

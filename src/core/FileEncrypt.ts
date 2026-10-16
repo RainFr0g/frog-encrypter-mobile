@@ -5,7 +5,7 @@ import { getDecryptPasswordModal } from '../modals/DecryptPasswordModal';
 import { CryptoService } from '../utils/CryptoService';
 import { FrogView } from './views/FrogView';
 import { MdencView } from './views/MdencView';
-import { formatBytes, toArrayBuffer } from '../utils/mics';
+import { formatBytes, toArrayBuffer } from '../utils/misc';
 import { CHUNK_SIZE, FILE_ENCRYPTED_EXTENSION, FILE_VIEW_TYPE, JSON_SIZE_BYTES, MD_ENCRYPTED_EXTENSION, MD_VIEW_TYPE } from '../utils/constants';
 import { buildEncryptedNote, decryptNoteCipher, getJsonFooterFromBinary, persistPasswordAndCache, probeSavedPasswords, shouldCompress } from './helpers/EncryptHelper';
 import { StorageService } from '../utils/StorageService';

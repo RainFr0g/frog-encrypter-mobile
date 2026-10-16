@@ -1,5 +1,5 @@
 import { App, Modal, Setting, TextComponent } from 'obsidian';
-import { decodeHint } from '../utils/mics';
+import { decodeHint } from '../utils/misc';
 
 export async function getDecryptPasswordModal(app: App, hint: string, ) {
 	return new Promise<{ password: string; hasConfirmed: boolean }>( (resolve) => {

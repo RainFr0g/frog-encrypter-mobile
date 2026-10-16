@@ -2,7 +2,7 @@ import { deflate, inflate } from 'pako';
 import { CryptoCache } from './types';
 import CryptoEngine from './CryptoEngine';
 import { VECTOR_SIZE, SALT_SIZE } from './constants';
-import { base64ToBytes, bytesEquals, bytesToBase64 } from './mics';
+import { base64ToBytes, bytesEquals, bytesToBase64 } from './misc';
 
 export class CryptoService {
 	private engine: CryptoEngine;

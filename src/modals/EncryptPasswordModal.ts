@@ -1,7 +1,7 @@
 import { App, Modal, Notice, Setting, TextComponent } from 'obsidian';
 import { SettingsService } from '../settings/SettingsService';
 import { PasswordManager } from '../utils/PasswordManager';
-import { encodeHint, truncateUtf8 } from '../utils/mics';
+import { encodeHint, truncateUtf8 } from '../utils/misc';
 import { HINT_MAX_BYTES } from '../utils/constants';
 
 export function getEncryptPasswordModal(app: App) {

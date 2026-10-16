@@ -7,7 +7,7 @@ import { getDecryptPasswordModal } from '../../modals/DecryptPasswordModal';
 import { getDecryptResultModal } from '../../modals/DecryptResultModal';
 import { persistPasswordAndCache, probeSavedPasswords } from './EncryptHelper';
 import { SECRET_START, SECRET_END, SECRET_REGEX} from '../../utils/constants'
-import { isValidBase64 } from '../../utils/mics';
+import { isValidBase64 } from '../../utils/misc';
 import { PasswordManager } from '../../utils/PasswordManager';
 
 export class InplaceEncryptHelper {
