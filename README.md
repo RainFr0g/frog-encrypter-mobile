@@ -1,7 +1,7 @@
 # Frog Encrypter Mobile
 
 ![GitHub release](https://img.shields.io/github/v/release/RainFr0g/frog-encrypter-mobile)
-![GitHub license](https://img.shields.io/github/license/RainFr0g/frog-encrypter-mobile?cacheSeconds=0)
+![GitHub license](https://img.shields.io/github/license/RainFr0g/frog-encrypter-mobile)
 ![Obsidian min version](https://img.shields.io/badge/Obsidian-1.8.7%2B-blue)
 
 **Encryption of text fragments, notes, and files inside the Obsidian vault.**
