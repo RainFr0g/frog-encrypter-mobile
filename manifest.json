@@ -1,7 +1,7 @@
 {
 	"id": "frog-encrypter-mobile",
 	"name": "Frog Encrypter Mobile",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"minAppVersion": "1.8.7",
 	"description": "Encrypt text fragments, notes, and files in your vault on mobile.",
 	"author": "RainFr0g",

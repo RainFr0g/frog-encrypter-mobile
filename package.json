@@ -1,6 +1,6 @@
 {
 	"name": "frog-encrypter-mobile",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "Encrypt text fragments, notes, and files in your vault on mobile",
 	"main": "main.js",
 	"scripts": {
