@@ -72,21 +72,21 @@
    4. Confirm password animations (EncryptPasswordModal.ts)
    -------------------------------------------------------------------------- */
 
-.frogenc-confirm-mismatch {
+.modal .frogenc-confirm-mismatch {
     animation: shake 0.5s ease-in-out;
 }
 
-.frogenc-confirm-mismatch input {
-    border-color: var(--text-error) !important;
+.modal .frogenc-confirm-mismatch input {
+    border-color: var(--text-error);
 }
 
-.frogenc-confirm-mismatch button {
-    border: 1px solid var(--text-error) !important;
+.modal .frogenc-confirm-mismatch button {
+    border: 1px solid var(--text-error);
 }
 
-.frogenc-confirm-match input {
-    border-color: var(--color-green) !important;
-    box-shadow: 0 0 0 2px rgba(var(--color-green-rgb), 0.3) !important;
+.modal .frogenc-confirm-match input {
+    border-color: var(--color-green);
+    box-shadow: 0 0 0 2px rgba(var(--color-green-rgb), 0.3);
     transition: all 0.3s ease-in-out;
 }
 
@@ -170,15 +170,15 @@
 }
 
 .frog-cancellable-notice-hidden {
-    display: none !important;
+    display: none;
 }
 
 /* --------------------------------------------------------------------------
    7. Encrypted note view (MdencView.ts)
    -------------------------------------------------------------------------- */
 
-.is-mobile .workspace-leaf-content[data-type='frog-mdenc-view'] .cm-scroller.cm-scroller {
-    padding-top: 0 !important;
+.is-mobile .workspace-leaf-content[data-type='frog-mdenc-view'] .cm-scroller.cm-scroller.cm-scroller.cm-scroller {
+    padding-top: 0;
 }
 
 .workspace-leaf-content[data-type='frog-mdenc-view'] .view-content {
